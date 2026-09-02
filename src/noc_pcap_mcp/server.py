@@ -1,13 +1,13 @@
 """MCP server entry point: registers PCAP analysis tools over stdio."""
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from .jsonrpc import extract_exchange
 from .pcap_utils import list_conversations, summarize_capture
 from .security import detect_anomalies
 from .tcp_analysis import analyze_conversation
 
-mcp = FastMCP("noc-pcap-mcp")
+mcp = MCPServer("noc-pcap-mcp")
 
 
 @mcp.tool()

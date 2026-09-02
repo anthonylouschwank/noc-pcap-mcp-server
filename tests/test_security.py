@@ -36,6 +36,12 @@ def test_detect_dns_high_entropy_flags_only_the_dga_like_query(dns_entropy_pcap)
     assert findings[0]["query"] == "qx7mvz9klp2wrtbn4hjs8f.example.com"
 
 
+def test_syn_scan_of_port_23_is_not_reported_as_telnet_session(syn_scan_of_port_23_pcap):
+    findings = detect_anomalies(syn_scan_of_port_23_pcap)
+
+    assert not any(f["type"] == "cleartext_protocol" for f in findings)
+
+
 def test_detect_cleartext_credentials(cleartext_credentials_pcap):
     findings = detect_anomalies(cleartext_credentials_pcap)
     by_protocol = {f["protocol"] for f in findings if f["type"] == "cleartext_credential"}

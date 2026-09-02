@@ -153,8 +153,10 @@ def _detect_cleartext_credentials(file_path: str) -> list[dict[str, Any]]:
             src, dst = packet[IP].src, packet[IP].dst
             payload = bytes(tcp.payload)
 
+            is_established_ack = tcp.flags.A and not (tcp.flags.S or tcp.flags.F or tcp.flags.R)
+
             if not payload:
-                if tcp.sport == 23 or tcp.dport == 23:
+                if (tcp.sport == 23 or tcp.dport == 23) and is_established_ack:
                     key = frozenset({(src, tcp.sport), (dst, tcp.dport)})
                     if key not in telnet_streams_flagged:
                         telnet_streams_flagged.add(key)

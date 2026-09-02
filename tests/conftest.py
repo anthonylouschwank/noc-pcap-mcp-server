@@ -165,6 +165,20 @@ def port_scan_pcap(tmp_path: Path) -> str:
 
 
 @pytest.fixture
+def syn_scan_of_port_23_pcap(tmp_path: Path) -> str:
+    """A single SYN probe to port 23 -- a scan touching the Telnet port, but
+    with no established connection. Regression case: this must NOT be
+    reported as a Telnet session (found via manual MCP Inspector testing,
+    where a port scan that happened to include port 23 was misreported)."""
+    pkt = Ether() / IP(src="10.0.11.1", dst="10.0.11.2") / TCP(sport=41023, dport=23, flags="S", seq=1)
+    pkt.time = BASE_TIME + 900
+
+    pcap_path = tmp_path / "syn_scan_port_23.pcap"
+    wrpcap(str(pcap_path), [pkt])
+    return str(pcap_path)
+
+
+@pytest.fixture
 def arp_spoof_pcap(tmp_path: Path) -> str:
     """10.0.4.1 is announced by two different MAC addresses in ARP replies,
     the classic ARP spoofing signature."""

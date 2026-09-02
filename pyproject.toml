@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MCP server exposing PCAP analysis tools for NOC network diagnostics: TCP conversations, RTT/retransmissions, security anomalies and JSON-RPC exchange reconstruction"
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=1.2.0",
+    "mcp>=2.0.0",
     "scapy>=2.6.0",
 ]
 
