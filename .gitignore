@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+.vscode/
+.idea/
+
+# Real captures may contain sensitive traffic; keep only checked-in samples.
+sample_captures/*.pcap
+sample_captures/*.pcapng
+!sample_captures/.gitkeep

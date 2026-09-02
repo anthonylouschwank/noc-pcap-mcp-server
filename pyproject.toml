@@ -1,0 +1,19 @@
+[project]
+name = "noc-pcap-mcp"
+version = "0.1.0"
+description = "MCP server exposing PCAP analysis tools for NOC network diagnostics: TCP conversations, RTT/retransmissions, security anomalies and JSON-RPC exchange reconstruction"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.2.0",
+    "scapy>=2.6.0",
+]
+
+[project.scripts]
+noc-pcap-mcp = "noc_pcap_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/noc_pcap_mcp"]
