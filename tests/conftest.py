@@ -144,3 +144,114 @@ def duplicate_ack_pcap(tmp_path: Path) -> str:
     pcap_path = tmp_path / "duplicate_ack.pcap"
     wrpcap(str(pcap_path), [syn, synack, first_ack, duplicate_ack])
     return str(pcap_path)
+
+
+@pytest.fixture
+def port_scan_pcap(tmp_path: Path) -> str:
+    """25 SYNs from one source to 25 distinct ports on one host: a classic
+    vertical port scan, above the detector's threshold of 20."""
+    scanner, target = "10.0.3.1", "10.0.3.2"
+    t = BASE_TIME + 300
+
+    pkts = []
+    for i, port in enumerate(range(1000, 1025)):
+        pkt = Ether() / IP(src=scanner, dst=target) / TCP(sport=40000 + i, dport=port, flags="S", seq=100 + i)
+        pkt.time = t + i * 0.001
+        pkts.append(pkt)
+
+    pcap_path = tmp_path / "port_scan.pcap"
+    wrpcap(str(pcap_path), pkts)
+    return str(pcap_path)
+
+
+@pytest.fixture
+def arp_spoof_pcap(tmp_path: Path) -> str:
+    """10.0.4.1 is announced by two different MAC addresses in ARP replies,
+    the classic ARP spoofing signature."""
+    t = BASE_TIME + 400
+
+    legit_reply = Ether(src="aa:aa:aa:aa:aa:01") / ARP(
+        op=2, psrc="10.0.4.1", hwsrc="aa:aa:aa:aa:aa:01", pdst="10.0.4.100"
+    )
+    legit_reply.time = t
+
+    spoofed_reply = Ether(src="bb:bb:bb:bb:bb:66") / ARP(
+        op=2, psrc="10.0.4.1", hwsrc="bb:bb:bb:bb:bb:66", pdst="10.0.4.100"
+    )
+    spoofed_reply.time = t + 1.0
+
+    pcap_path = tmp_path / "arp_spoof.pcap"
+    wrpcap(str(pcap_path), [legit_reply, spoofed_reply])
+    return str(pcap_path)
+
+
+@pytest.fixture
+def dns_entropy_pcap(tmp_path: Path) -> str:
+    """One normal-looking query and one long, high-entropy (DGA-like) query."""
+    t = BASE_TIME + 500
+
+    normal = (
+        Ether()
+        / IP(src="10.0.5.1", dst="8.8.8.8")
+        / UDP(sport=5353, dport=53)
+        / DNS(rd=1, qd=DNSQR(qname="www.google.com"))
+    )
+    normal.time = t
+
+    dga = (
+        Ether()
+        / IP(src="10.0.5.1", dst="8.8.8.8")
+        / UDP(sport=5354, dport=53)
+        / DNS(rd=1, qd=DNSQR(qname="qx7mvz9klp2wrtbn4hjs8f.example.com"))
+    )
+    dga.time = t + 0.1
+
+    pcap_path = tmp_path / "dns_entropy.pcap"
+    wrpcap(str(pcap_path), [normal, dga])
+    return str(pcap_path)
+
+
+@pytest.fixture
+def cleartext_credentials_pcap(tmp_path: Path) -> str:
+    """One packet per cleartext-credential channel: HTTP Basic Auth, an HTTP
+    form password field, FTP USER/PASS, and an empty-payload Telnet packet."""
+    t = BASE_TIME + 600
+
+    basic_auth = (
+        Ether()
+        / IP(src="10.0.6.1", dst="10.0.6.2")
+        / TCP(sport=50000, dport=80, flags="PA", seq=1, ack=1)
+        / (b"GET /admin HTTP/1.1\r\nAuthorization: Basic dXNlcjpwYXNzd29yZA==\r\n\r\n")
+    )
+    basic_auth.time = t
+
+    form_post = (
+        Ether()
+        / IP(src="10.0.6.3", dst="10.0.6.4")
+        / TCP(sport=50001, dport=80, flags="PA", seq=1, ack=1)
+        / (b"POST /login HTTP/1.1\r\n\r\nusername=alice&password=hunter2")
+    )
+    form_post.time = t + 0.1
+
+    ftp_user = (
+        Ether()
+        / IP(src="10.0.6.5", dst="10.0.6.6")
+        / TCP(sport=50002, dport=21, flags="PA", seq=1, ack=1)
+        / b"USER alice\r\n"
+    )
+    ftp_user.time = t + 0.2
+
+    ftp_pass = (
+        Ether()
+        / IP(src="10.0.6.5", dst="10.0.6.6")
+        / TCP(sport=50002, dport=21, flags="PA", seq=13, ack=1)
+        / b"PASS hunter2\r\n"
+    )
+    ftp_pass.time = t + 0.3
+
+    telnet = Ether() / IP(src="10.0.6.7", dst="10.0.6.8") / TCP(sport=50003, dport=23, flags="A", seq=1, ack=1)
+    telnet.time = t + 0.4
+
+    pcap_path = tmp_path / "cleartext_credentials.pcap"
+    wrpcap(str(pcap_path), [basic_auth, form_post, ftp_user, ftp_pass, telnet])
+    return str(pcap_path)

@@ -10,7 +10,7 @@ from scapy.all import ARP, DNS, ICMP, IP, IPv6, TCP, UDP, PcapReader
 _TOP_TALKERS_LIMIT = 5
 
 
-def _require_file(file_path: str) -> None:
+def require_file(file_path: str) -> None:
     if not Path(file_path).is_file():
         raise FileNotFoundError(f"Capture file not found: {file_path}")
 
@@ -39,7 +39,7 @@ def _classify_protocol(packet: Any) -> str:
 
 def summarize_capture(file_path: str) -> dict[str, Any]:
     """Duration, packet count, protocol breakdown and top talkers for a capture."""
-    _require_file(file_path)
+    require_file(file_path)
 
     packet_count = 0
     first_time: float | None = None
@@ -96,7 +96,7 @@ def list_conversations(file_path: str) -> list[dict[str, Any]]:
     and numbered by the order they first appear in the capture (stream_id
     "0", "1", ...), similar to Wireshark's tcp.stream index.
     """
-    _require_file(file_path)
+    require_file(file_path)
 
     stream_id_by_key: dict[frozenset[tuple[str, int]], str] = {}
     stats: dict[str, dict[str, Any]] = {}
@@ -161,7 +161,7 @@ def get_conversation_packets(
     frame_number is the packet's 1-based position in the whole capture
     (matching Wireshark's "No." column), so callers can cite it as evidence.
     """
-    _require_file(file_path)
+    require_file(file_path)
 
     stream_id_by_key: dict[frozenset[tuple[str, int]], str] = {}
     endpoints_by_stream: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
