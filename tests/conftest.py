@@ -88,3 +88,59 @@ def empty_pcap(tmp_path: Path) -> str:
     pcap_path = tmp_path / "empty.pcap"
     wrpcap(str(pcap_path), [])
     return str(pcap_path)
+
+
+@pytest.fixture
+def zero_window_pcap(tmp_path: Path) -> str:
+    """A handshake, then the server advertises window=0 and later recovers
+    with a non-zero window and a different ack (so it isn't also read as a
+    duplicate ACK)."""
+    client, server = "10.0.1.1", "10.0.1.2"
+    cport, sport = 6000, 443
+    t = BASE_TIME + 100
+
+    syn = Ether() / IP(src=client, dst=server) / TCP(sport=cport, dport=sport, flags="S", seq=100)
+    syn.time = t
+    synack = Ether() / IP(src=server, dst=client) / TCP(sport=sport, dport=cport, flags="SA", seq=500, ack=101)
+    synack.time = t + 0.05
+    ack = Ether() / IP(src=client, dst=server) / TCP(sport=cport, dport=sport, flags="A", seq=101, ack=501)
+    ack.time = t + 0.06
+
+    zero_window = Ether() / IP(src=server, dst=client) / TCP(
+        sport=sport, dport=cport, flags="A", seq=501, ack=101, window=0
+    )
+    zero_window.time = t + 0.10
+
+    recovery = Ether() / IP(src=server, dst=client) / TCP(
+        sport=sport, dport=cport, flags="A", seq=501, ack=102, window=4096
+    )
+    recovery.time = t + 0.40
+
+    pcap_path = tmp_path / "zero_window.pcap"
+    wrpcap(str(pcap_path), [syn, synack, ack, zero_window, recovery])
+    return str(pcap_path)
+
+
+@pytest.fixture
+def duplicate_ack_pcap(tmp_path: Path) -> str:
+    """A handshake, then the client sends the same pure ACK twice in a row."""
+    client, server = "10.0.2.1", "10.0.2.2"
+    cport, sport = 7000, 443
+    t = BASE_TIME + 200
+
+    syn = Ether() / IP(src=client, dst=server) / TCP(sport=cport, dport=sport, flags="S", seq=100)
+    syn.time = t
+    synack = Ether() / IP(src=server, dst=client) / TCP(sport=sport, dport=cport, flags="SA", seq=500, ack=101)
+    synack.time = t + 0.05
+    first_ack = Ether() / IP(src=client, dst=server) / TCP(
+        sport=cport, dport=sport, flags="A", seq=101, ack=501, window=8192
+    )
+    first_ack.time = t + 0.06
+    duplicate_ack = Ether() / IP(src=client, dst=server) / TCP(
+        sport=cport, dport=sport, flags="A", seq=101, ack=501, window=8192
+    )
+    duplicate_ack.time = t + 0.09
+
+    pcap_path = tmp_path / "duplicate_ack.pcap"
+    wrpcap(str(pcap_path), [syn, synack, first_ack, duplicate_ack])
+    return str(pcap_path)

@@ -15,7 +15,7 @@ def _require_file(file_path: str) -> None:
         raise FileNotFoundError(f"Capture file not found: {file_path}")
 
 
-def _iso(timestamp: float) -> str:
+def iso_timestamp(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
 
 
@@ -78,8 +78,8 @@ def summarize_capture(file_path: str) -> dict[str, Any]:
     return {
         "file_path": file_path,
         "packet_count": packet_count,
-        "start_time": _iso(first_time),
-        "end_time": _iso(last_time),
+        "start_time": iso_timestamp(first_time),
+        "end_time": iso_timestamp(last_time),
         "duration_seconds": round(last_time - first_time, 6),
         "protocol_counts": dict(protocol_counts),
         "top_talkers": [
@@ -143,10 +143,59 @@ def list_conversations(file_path: str) -> list[dict[str, Any]]:
         conversations.append(
             {
                 **entry,
-                "start_time": _iso(start),
-                "end_time": _iso(end),
+                "start_time": iso_timestamp(start),
+                "end_time": iso_timestamp(end),
                 "duration_seconds": round(end - start, 6),
             }
         )
 
     return conversations
+
+
+def get_conversation_packets(
+    file_path: str, stream_id: str
+) -> tuple[dict[str, Any], dict[str, Any], list[tuple[int, Any]]]:
+    """Endpoints and time-ordered (frame_number, packet) pairs for one TCP
+    conversation, identified by the stream_id produced by list_conversations.
+
+    frame_number is the packet's 1-based position in the whole capture
+    (matching Wireshark's "No." column), so callers can cite it as evidence.
+    """
+    _require_file(file_path)
+
+    stream_id_by_key: dict[frozenset[tuple[str, int]], str] = {}
+    endpoints_by_stream: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
+    matching_packets: list[tuple[int, Any]] = []
+
+    with PcapReader(file_path) as reader:
+        for frame_number, packet in enumerate(reader, start=1):
+            if TCP not in packet:
+                continue
+            if IP in packet:
+                src_ip, dst_ip = packet[IP].src, packet[IP].dst
+            elif IPv6 in packet:
+                src_ip, dst_ip = packet[IPv6].src, packet[IPv6].dst
+            else:
+                continue
+
+            tcp = packet[TCP]
+            endpoint_a = (src_ip, tcp.sport)
+            endpoint_b = (dst_ip, tcp.dport)
+            key = frozenset((endpoint_a, endpoint_b))
+
+            if key not in stream_id_by_key:
+                sid = str(len(stream_id_by_key))
+                stream_id_by_key[key] = sid
+                endpoints_by_stream[sid] = (
+                    {"ip": endpoint_a[0], "port": endpoint_a[1]},
+                    {"ip": endpoint_b[0], "port": endpoint_b[1]},
+                )
+
+            if stream_id_by_key[key] == stream_id:
+                matching_packets.append((frame_number, packet))
+
+    if stream_id not in endpoints_by_stream:
+        raise ValueError(f"No TCP conversation with stream_id={stream_id!r} in {file_path}")
+
+    endpoint_a, endpoint_b = endpoints_by_stream[stream_id]
+    return endpoint_a, endpoint_b, matching_packets
