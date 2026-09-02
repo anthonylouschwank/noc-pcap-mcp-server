@@ -255,3 +255,68 @@ def cleartext_credentials_pcap(tmp_path: Path) -> str:
     pcap_path = tmp_path / "cleartext_credentials.pcap"
     wrpcap(str(pcap_path), [basic_auth, form_post, ftp_user, ftp_pass, telnet])
     return str(pcap_path)
+
+
+def _build_jsonrpc_stream(client: str, server: str, cport: int, sport: int, t: float, messages):
+    """messages: list of (sender, delay, json_text) -- sender is "client" or
+    "server". Builds one TCP packet per message with correctly incrementing
+    per-direction seq numbers."""
+    next_seq = {"client": 1, "server": 1000}
+    pkts = []
+
+    for sender, delay, json_text in messages:
+        payload = json_text.encode("utf-8")
+        seq = next_seq[sender]
+        if sender == "client":
+            pkt = (
+                Ether()
+                / IP(src=client, dst=server)
+                / TCP(sport=cport, dport=sport, flags="PA", seq=seq, ack=1)
+                / payload
+            )
+        else:
+            pkt = (
+                Ether()
+                / IP(src=server, dst=client)
+                / TCP(sport=sport, dport=cport, flags="PA", seq=seq, ack=1)
+                / payload
+            )
+        pkt.time = t + delay
+        pkts.append(pkt)
+        next_seq[sender] = seq + len(payload)
+
+    return pkts
+
+
+@pytest.fixture
+def jsonrpc_pcap(tmp_path: Path) -> str:
+    """A minimal MCP-style JSON-RPC lifecycle: initialize request/response,
+    an initialized notification, and one tools/call request/response."""
+    t = BASE_TIME + 700
+    messages = [
+        ("client", 0.00, '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n'),
+        ("server", 0.01, '{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}\n'),
+        ("client", 0.02, '{"jsonrpc":"2.0","method":"notifications/initialized"}\n'),
+        ("client", 0.03, '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"foo"}}\n'),
+        ("server", 0.04, '{"jsonrpc":"2.0","id":2,"result":{"content":[]}}\n'),
+    ]
+    pkts = _build_jsonrpc_stream("10.0.7.1", "10.0.7.2", 55000, 9000, t, messages)
+
+    pcap_path = tmp_path / "jsonrpc.pcap"
+    wrpcap(str(pcap_path), pkts)
+    return str(pcap_path)
+
+
+@pytest.fixture
+def jsonrpc_malformed_tail_pcap(tmp_path: Path) -> str:
+    """One valid request followed by a segment that isn't valid JSON."""
+    t = BASE_TIME + 800
+    messages = [
+        ("client", 0.00, '{"jsonrpc":"2.0","id":1,"method":"ping"}\n'),
+        ("client", 0.01, "not-json-at-all"),
+    ]
+    pkts = _build_jsonrpc_stream("10.0.8.1", "10.0.8.2", 56000, 9001, t, messages)
+
+    pcap_path = tmp_path / "jsonrpc_malformed.pcap"
+    wrpcap(str(pcap_path), pkts)
+    return str(pcap_path)
